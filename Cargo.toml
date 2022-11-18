@@ -1,0 +1,7 @@
+[package]
+name = "text-finder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slice-ring-buffer="0.3.2"
