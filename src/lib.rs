@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::fmt;
 
 use slice_ring_buffer::SliceRingBuffer;
 
@@ -11,8 +12,17 @@ impl CharString {
     }
 }
 
+impl fmt::Display for CharString {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for c in &self.0 {
+            write!(f, "{}", c)?;
+        }
+        Ok(())
+    }
+}
+
 /// Set of string tokens representing a complete phrase.
-#[derive(Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Phrase(pub Vec<CharString>);
 impl Phrase {
     /// Length of the strings joined on a single character
@@ -37,6 +47,18 @@ impl Phrase {
     }
 }
 
+impl fmt::Display for Phrase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (i, ch_str) in self.0.iter().enumerate() {
+            write!(f, "{}", ch_str.to_string())?;
+            if i != self.0.len() - 1 {
+                write!(f, " ")?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Instance of a phrase in a particular file or series of bytes.
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub struct PhraseInstance {
@@ -48,22 +70,17 @@ pub struct PhraseInstance {
     pub context: String
 }
 
-/// Any type that can be converted into a [`CharString`]
-pub trait IntoCharString {
-    fn into_char_string(&self) -> CharString;
-}
-
-impl IntoCharString for String {
-    fn into_char_string(&self) -> CharString {
-        CharString(self.chars().collect())
-    }
-}
-
 pub trait IntoPhrase {
     fn into_char_string(&self) -> Phrase {
         todo!()
     }
 }
+
+/// Bytes-per character flags (1, 2, 4)
+pub type BpcFlags = u8;
+const BPC_1: BpcFlags = 0b00000001;
+const BPC_2: BpcFlags = 0b00000010;
+const BPC_4: BpcFlags = 0b00000100;
 
 /// Finds text in a buffered input stream
 pub struct TextFinder<R: Read> {
@@ -71,44 +88,45 @@ pub struct TextFinder<R: Read> {
     read: R,
     /// Phrases to search for
     phrases: Vec<Phrase>,
-    /// Buffer that stores 1 bpc text
-    context_1: SliceRingBuffer<u8>,
-    /// Buffer that stores 2 bpc text
-    context_2: SliceRingBuffer<u8>,
-    /// Buffer that stores 4 bpc text
-    context_4: SliceRingBuffer<u8>,
-    /// Maximum bytes per character
-    max_bpc: usize
+    /// Main "sliding" byte buffer
+    buffer: SliceRingBuffer<u8>,
+    /// Bytes-per-character flags
+    bpc_flags: BpcFlags
 }
 
 impl<R: Read> TextFinder<R> {
-
-    pub fn new(read: R, phrases: Vec<Phrase>, context_size: usize) -> Self {
-        // for phrase in &phrases {
-        //     if phrase.len() > 
-        // }
+    pub fn new(
+        read: R,
+        phrases: Vec<Phrase>,
+        context_size: usize,
+        bpc_flags: BpcFlags
+    ) -> Self {
+        for phrase in &phrases {
+            if context_size < phrase.joined_len() {
+                panic!("Phrase had ");
+            }
+        }
         Self {
             read,
             phrases,
-            context_1: SliceRingBuffer::with_capacity(context_size),
-            context_2: SliceRingBuffer::with_capacity(context_size*2),
-            context_4: SliceRingBuffer::with_capacity(context_size*4),
-            max_bpc: 1
+            buffer: SliceRingBuffer::with_capacity(context_size*4),
+            bpc_flags
         }
     }
+}
 
-    pub fn with_max_bbc(mut self, max_bpc: usize) -> Self {
-        if max_bpc == 0  { panic!("max_bpc cannot be 0") }
-        if max_bpc > 4 { panic!("max_bpc cannot be greater than 4") }
-        self.max_bpc = max_bpc;
-        self
+impl<R: Read> Iterator for TextFinder<R> {
+    type Item = PhraseInstance;
+    fn next(&mut self) -> Option<Self::Item> {
+        
+        todo!()
     }
 }
 
 #[cfg(test)]
 mod test {
     
-    use crate::Phrase;
+    use crate::{Phrase, CharString};
 
     #[test]
     fn joined_len() {
@@ -123,5 +141,20 @@ mod test {
 
         let phrase = Phrase::from_str("Testing    123    testing");
         assert_eq!(19, phrase.joined_len());
+    }
+
+    #[test]
+    fn to_string_char_str() {
+        let ch_str = CharString::from_str("Testing 123");
+        assert_eq!(String::from("Testing 123"), ch_str.to_string());
+    }
+
+    #[test]
+    fn to_string_phrase() {
+        let phrase = Phrase::from_str("Testing 123");
+        assert_eq!(String::from("Testing 123"), phrase.to_string());
+
+        let phrase = Phrase::from_str("Testing     123   ");
+        assert_eq!(String::from("Testing 123"), phrase.to_string());
     }
 }
